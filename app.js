@@ -1,61 +1,65 @@
-const express = require("express");
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const csvParser = require('csv-parser');
+const turf = require('@turf/turf');
+const moment = require('moment');
+
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.get("/", (req, res) => res.type('html').send(html));
+// Enable CORS
+app.use(cors());
 
-const server = app.listen(port, () => console.log(`Example app listening on port ${port}!`));
+// Serve static files
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-server.keepAliveTimeout = 120 * 1000;
-server.headersTimeout = 120 * 1000; 
+// Load GeoJSON data
+const bgdf = JSON.parse(fs.readFileSync('assets/population_grid_256x256_points_filtered.geojson'));
 
-const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Hello from Render!</title>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
-    <script>
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          spread: 70,
-          origin: { y: 0.6 },
-          disableForReducedMotion: true
-        });
-      }, 500);
-    </script>
-    <style>
-      @import url("https://p.typekit.net/p.css?s=1&k=vnd5zic&ht=tk&f=39475.39476.39477.39478.39479.39480.39481.39482&a=18673890&app=typekit&e=css");
-      @font-face {
-        font-family: "neo-sans";
-        src: url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/l?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff2"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/d?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("woff"), url("https://use.typekit.net/af/00ac0a/00000000000000003b9b2033/27/a?primer=7cdcb44be4a7db8877ffa5c0007b8dd865b3bbc383831fe2ea177f62257a9191&fvd=n7&v=3") format("opentype");
-        font-style: normal;
-        font-weight: 700;
-      }
-      html {
-        font-family: neo-sans;
-        font-weight: 700;
-        font-size: calc(62rem / 16);
-      }
-      body {
-        background: white;
-      }
-      section {
-        border-radius: 1em;
-        padding: 1em;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        margin-right: -50%;
-        transform: translate(-50%, -50%);
-      }
-    </style>
-  </head>
-  <body>
-    <section>
-      Hello from Render!
-    </section>
-  </body>
-</html>
-`
+// Load CSV data
+let popu_df = {};
+fs.createReadStream('assets/population_grid_256x256_data_light.csv')
+  .pipe(csvParser())
+  .on('data', (row) => {
+    const timestamp = moment(row.index).toISOString();
+    delete row.index;
+    popu_df[timestamp] = row;
+  })
+  .on('end', () => {
+    console.log('CSV data loaded successfully.');
+  });
+
+// Routes
+app.get('/living', (req, res) => {
+  res.json(bgdf);
+});
+
+app.get('/data', (req, res) => {
+  const ymd = req.query.ymd || '20180301';
+  const hour = parseInt(req.query.hour || 9);
+
+  const year = parseInt(ymd.slice(0, 4));
+  const month = parseInt(ymd.slice(4, 6)) - 1; // JavaScript months are zero-indexed
+  const day = parseInt(ymd.slice(6, 8));
+
+  let mdate = moment({ year, month, day, hour: hour % 24 });
+  if (hour >= 24) {
+    mdate.add(1, 'days');
+  }
+
+  const timestamp = mdate.toISOString();
+  const ldict = popu_df[timestamp] || {};
+
+  res.json({ lte: ldict });
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'templates/population.html'));
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}`);
+});

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Extrude polygons for 3D indoor mapping</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <script src="//d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script src="https://code.jquery.com/jquery-3.5.1.js"
+        integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"
+        integrity="sha256-T0Vest3yCU7pafRw9r+settMBX6JkKN06dqBnpQ8d30=" crossorigin="anonymous"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.js"></script>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .map-overlay {
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: 25%;
+            top: 0;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .map-overlay h2 {
+            line-height: 24px;
+            display: block;
+            margin: 0 0 10px;
+        }
+
+        .map-overlay .legend .bar {
+            height: 10px;
+            width: 100%;
+            background: linear-gradient(to right, #fca107, #7f3121);
+        }
+
+        .map-overlay input {
+            background-color: transparent;
+            display: inline-block;
+            width: 100%;
+            position: relative;
+            margin: 0;
+            cursor: ew-resize;
+        }
+
+        #zoom-wrap {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 150px;
+            background: white;
+            font-family: 'Arial';
+        }
+
+        #zoom {
+            display: inline-block;
+        }
+
+        #slider-idade {
+            float: left !important;
+            width: 420px !important;
+            margin: 20px;
+        }
+
+        #valor-idade {
+            color: #3fa635;
+            font-size: 28px !important;
+            border: 1px #3fa635 dotted !important;
+            border-radius: 3px !important;
+            width: 70px !important;
+            vertical-align: middle;
+            margin-top: 8px;
+        }
+
+        .ui-slider .ui-slider-handle {
+            width: 1.4em !important;
+            height: 1.4em !important;
+            cursor: default;
+            border-radius: 50px !important;
+            -moz-border-radius: 50px !important;
+            -webkit-border-radius: 50px !important;
+        }
+
+        .ui-slider-handle .ui-state-default,
+        .ui-widget-content .ui-state-default {
+            border: 0px solid #BDC3C7 !important;
+            background: #BDC3C7 !important;
+            color: #34495E;
+        }
+
+        .ui-slider-handle .ui-state-hover,
+        .ui-widget-content .ui-state-hover {
+            border: 0px solid #7F8C8D !important;
+            background: #7F8C8D !important;
+            background-image: none !important;
+            color: #34495E;
+        }
+
+
+        .ui-slider-handle .ui-state-active,
+        .ui-widget-content .ui-state-active {
+            border: 0px solid #3FA635 !important;
+            background: #3FA635 !important;
+            background-image: none !important;
+            font-weight: normal;
+            color: #fff;
+        }
+
+
+        .ui-slider .ui-slider-range {
+            position: absolute;
+            background-position: 0 0;
+            border-radius: 3px !important;
+            -moz-border-radius: 3px !important;
+            -webkit-border-radius: 3px !important;
+            background: #59BA41 !important;
+        }
+
+        .ui-widget-content {
+            background-image: none !important;
+            background: #ECF0F1 !important;
+            border: 0px solid #3FA635 !important;
+            border-radius: 3px !important;
+            -moz-border-radius: 3px !important;
+            -webkit-border-radius: 3px !important;
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id='zoom-wrap'>
+        <!--Zoom Level: <div id='zoom'>3</div-->
+        <!--h2>Cluster Size <label id="cluster radius"></label></h2>
+    <input id="slider" type="range" min=0 max=100 step=1 value=0 /-->
+    <h5>LTE(pp/10000m^2): gray &gt; 100 &gt; yellow &gt; 500 &gt; 1000 &gt; 1500 &gt; 2000 &gt; red</h5>
+    <h5>Traffic(km/h): red &gt; 10 &gt; orange &gt; 20 &gt; yellow &gt; 30 &gt; green </h5>
+    </div>
+
+    <div class="map-overlay top">
+        <div class="map-overlay-inner">
+            <h2>YMD:
+                <label id="ymd"></label>
+            </h2>
+            <p style='text-align:right'>
+                <input id="ymd-slider" type="range" min=0 max=365 step=1 value=0 />
+                <button id='ymd-plus'>+</button>
+                <button id='ymd-minus'>-</button>
+            </p>
+
+            <!--<input id="ymd-slider" type="button" value="+" style="float: left"/> -->
+
+
+            <h2>Hour:
+                <label id="hour"></label>
+            </h2>
+            <p style='text-align:right'>
+                <input id="hour-slider" type="range" min=0 max=48 step=1 value=18 />
+                <button id='hour-plus'>+</button>
+                <button id='hour-minus'>-</button>
+            </p>
+        </div>
+    </div>
+    <script>
+        $(function () {
+
+
+            mapboxgl.accessToken = 'pk.eyJ1IjoiaHNtNjkxMSIsImEiOiJjazl0and6aDUwOWF2M2RvemdrYjllczV3In0.qGmaAF6v-1LAF9C-dnMLBg';
+            var map = new mapboxgl.Map({
+                container: 'map',
+                style: 'mapbox://styles/mapbox/streets-v11',
+                center: [126.9780, 37.5665],
+                zoom: 10,
+                pitch: 50,
+                //bearing: 20,
+                antialias: true
+            });
+            var colors = [
+                '#cccccc',
+                '#fed976',
+                '#feb24c',
+                '#fd8d3c',
+                '#f03b20',
+                '#bd0026'
+            ];
+
+            ymd_list = {};
+            var mday = new Date(2018, 2, 1);
+            for (var i = 0; i < 365; i++) {
+                var tomorrow = new Date(mday.getTime() + 24 * 60 * 60 * 1000 * i);
+                //ymd_list[i] = moment(tomorrow).format('YYYYMMDD');
+                ymd_list[i] = tomorrow;
+            }
+
+            map.on('load', function () {
+
+
+                d3.json(
+                    './living',
+                    function (data) {
+                        map.addSource('people', {
+                            type: 'geojson',
+                            data: data,
+                        });
+
+                        d3.json(
+                            './assets/seoul_link_network.geojson',
+                            function (data) {
+                                map.addSource('roads', {
+                                    type: 'geojson',
+                                    data: data,
+                                });
+
+
+                                map.addLayer({
+                                    'id': 'room-extrusion',
+                                    'type': 'fill-extrusion',
+                                    'source': 'people',
+                                    'paint': {
+                                        // See the Mapbox Style Specification for details on data expressions.
+                                        // https://docs.mapbox.com/mapbox-gl-js/style-spec/#expressions
+
+                                        // Get the fill-extrusion-color from the source 'color' property.
+                                        //'fill-extrusion-color': ['get', 'color'],
+                                        //'fill-extrusion-color': '#556677',
+
+                                        'fill-extrusion-color': [
+                                            'step',
+                                            ['get', 'height'],
+                                            colors[0],//'#51bbd6',
+                                            100,
+                                            colors[1],//'#f1f075',
+                                            500,
+                                            colors[2],//'#f28cb1'
+                                            1000,
+                                            colors[3],
+                                            1500,
+                                            colors[4],
+                                            2000,
+                                            colors[5],
+                                        ],
+
+                                        // Get fill-extrusion-height from the source 'height' property.
+                                        'fill-extrusion-height': ['get', 'height'],
+
+                                        // Get fill-extrusion-base from the source 'base_height' property.
+                                        //'fill-extrusion-base': ['get', 'height'],
+
+                                        // Make extrusions slightly opaque for see through indoor walls.
+                                        'fill-extrusion-opacity': 0.7,
+                                        'fill-extrusion-vertical-gradient': true,
+                                    }
+                                });
+
+
+                                map.addLayer({
+                                    'id': 'roads',
+                                    'type': 'line',
+                                    'source': 'roads',
+                                    'paint': {
+                                        'line-width': 2,
+                                        // Use a get expression (https://docs.mapbox.com/mapbox-gl-js/style-spec/#expressions-get)
+                                        // to set the line-color to a feature property value.
+                                        'line-color': [
+                                            'step',
+                                            ['get', 'SPD'],
+                                            'black',
+                                            0.1,
+                                            'red',
+                                            10,
+                                            'orange',
+                                            20,
+                                            'yellow',
+                                            30,
+                                            'green',
+                                        ],
+                                        'line-opacity':0.5
+                                    }
+                                });
+
+
+                                function filterBy(ymd, hour) {
+                                    //mymd = ymd;
+                                    //mhour = hour;
+                                    mymd = ymd;
+                                    mhour = hour;
+                                    var qymd = moment(ymd_list[ymd]).format('YYYYMMDD');
+
+                                    console.log(qymd, ymd, hour);
+
+                                    //ymd_list[i] = moment(tomorrow).format('YYYYMMDD');
+
+                                    $.getJSON("/data?ymd=" + qymd + "&hour=" + hour, function (alldata) {
+										console.log(qymd, ymd, hour);
+                                        console.log(alldata);
+                                        //var obj = JSON.parse(alldata);
+                                        //console.log('parse', obj);
+                                        var hdata = alldata['lte'];
+                                        var tdata = alldata['traf'];
+                                        var geojson = map.getSource('people')._data;
+
+                                        for (var i = 0; i < geojson['features'].length; i++) {
+                                            var uid = geojson['features'][i]['properties']['MCODE'];
+                                            geojson['features'][i]['properties']['height'] = hdata[uid] / 100;
+                                        }
+
+                                        map.getSource('people').setData(geojson);
+
+                                        var geojson2 = map.getSource('roads')._data;
+
+                                        for (var i = 0; i < geojson2['features'].length; i++) {
+                                            var uid = geojson2['features'][i]['properties']['LINK_ID'];
+                                            geojson2['features'][i]['properties']['SPD'] = tdata[uid]
+                                        }
+
+                                        map.getSource('roads').setData(geojson2);
+
+
+                                        
+                                        document.getElementById('ymd').textContent = moment(ymd_list[ymd]).format('YYYYMMDD dd');
+                                        document.getElementById('hour').textContent = hour;
+                                        if (hour > 24) {
+                                            document.getElementById('hour').textContent = (hour - 24) + ' + 1day';
+                                        }
+                                    });
+                                }
+
+                                var mymd = 0;
+                                var mhour = 18;
+                                filterBy(mymd, mhour);
+
+
+                                document
+                                    .getElementById('ymd-slider')
+                                    .addEventListener('input', function (e) {
+                                        var mymd = parseInt(e.target.value, 10);
+                                        //var hour = parseInt(e.target.value, $('#hour-slider').val());
+
+                                        filterBy(mymd, mhour);
+                                    });
+
+                                document
+                                    .getElementById('hour-slider')
+                                    .addEventListener('input', function (e) {
+                                        //var ymd = parseInt(e.target.value, $('#ymd-slider').val());
+                                        var mhour = parseInt(e.target.value, 10);
+
+                                        filterBy(mymd, mhour);
+                                    });
+
+                                $('#ymd-plus').on('click', function (e) {
+                                    mymd += 1;
+                                    filterBy(mymd, mhour);
+                                    $('#ymd-slider').val(mymd);
+
+                                });
+                                $('#ymd-minus').on('click', function (e) {
+                                    if (mymd > 0) {
+                                        mymd -= 1;
+                                        filterBy(mymd, mhour);
+                                        $('#ymd-slider').val(mymd);
+                                    }
+                                });
+                                $('#hour-plus').on('click', function (e) {
+                                    if (mhour < 47) {
+                                        mhour += 1;
+                                        filterBy(mymd, mhour);
+                                        $('#hour-slider').val(mhour);
+                                    }
+                                });
+                                $('#hour-minus').on('click', function (e) {
+                                    if (mhour > 0) {
+                                        mhour -= 1;
+                                        filterBy(mymd, mhour);
+                                        $('#hour-slider').val(mhour);
+
+                                    }
+                                });
+                            });
+
+                    });
+
+            });
+        });
+    </script>
+
+</body>
+
+</html>
