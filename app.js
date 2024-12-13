@@ -7,7 +7,7 @@ const turf = require('@turf/turf');
 const moment = require('moment');
 
 const app = express();
-const port = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001;
 
 // Enable CORS
 app.use(cors());
@@ -16,16 +16,20 @@ app.use(cors());
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // Load GeoJSON data
-const bgdf = JSON.parse(fs.readFileSync('assets/population_grid_256x256_points_filtered.geojson'));
+const bgdf = JSON.parse(fs.readFileSync('assets/population_grid_128x128_points_filtered.geojson'));
 
 // Load CSV data
 let popu_df = {};
-fs.createReadStream('assets/population_grid_256x256_data_light.csv')
+fs.createReadStream('assets/population_grid_128x128_data_light.csv')
   .pipe(csvParser())
   .on('data', (row) => {
-    const timestamp = moment(row.index).toISOString();
+    const timestamp = moment(row.index, 'YYYY-MM-DD HH:mm:ss').format('YYYY-MM-DDTHH:mm:ss');
     delete row.index;
-    popu_df[timestamp] = row;
+    const parsedRow = {};
+    for (const [key, value] of Object.entries(row)) {
+      parsedRow[key] = parseFloat(value);
+    }
+    popu_df[timestamp] = parsedRow;
   })
   .on('end', () => {
     console.log('CSV data loaded successfully.');
@@ -37,7 +41,7 @@ app.get('/living', (req, res) => {
 });
 
 app.get('/data', (req, res) => {
-  const ymd = req.query.ymd || '20180301';
+  const ymd = req.query.ymd || '20170301';
   const hour = parseInt(req.query.hour || 9);
 
   const year = parseInt(ymd.slice(0, 4));
@@ -49,7 +53,9 @@ app.get('/data', (req, res) => {
     mdate.add(1, 'days');
   }
 
-  const timestamp = mdate.toISOString();
+
+  const timestamp = mdate.format('YYYY-MM-DDTHH:mm:ss');
+  console.log(timestamp);
   const ldict = popu_df[timestamp] || {};
 
   res.json({ lte: ldict });

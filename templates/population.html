@@ -30,13 +30,14 @@
         .map-overlay {
             font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
             position: absolute;
-            width: 25%;
+            width: 50%;
             top: 0;
             left: 0;
+            margin-top: 20px;
             padding: 10px;
         }
 
-        .map-overlay .map-overlay-inner {
+        .map-overlay .map-overlay-inner{
             background-color: #fff;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
             border-radius: 3px;
@@ -153,13 +154,6 @@
 
 <body>
     <div id="map"></div>
-    <div id='zoom-wrap'>
-        <!--Zoom Level: <div id='zoom'>3</div-->
-        <!--h2>Cluster Size <label id="cluster radius"></label></h2>
-    <input id="slider" type="range" min=0 max=100 step=1 value=0 /-->
-    <h5>LTE(pp/10000m^2): gray &gt; 100 &gt; yellow &gt; 500 &gt; 1000 &gt; 1500 &gt; 2000 &gt; red</h5>
-    <h5>Traffic(km/h): red &gt; 10 &gt; orange &gt; 20 &gt; yellow &gt; 30 &gt; green </h5>
-    </div>
 
     <div class="map-overlay top">
         <div class="map-overlay-inner">
@@ -167,7 +161,7 @@
                 <label id="ymd"></label>
             </h2>
             <p style='text-align:right'>
-                <input id="ymd-slider" type="range" min=0 max=365 step=1 value=5 />
+                <input id="ymd-slider" type="range" min=0 max=30 step=1 value=5 />
                 <button id='ymd-plus'>+</button>
                 <button id='ymd-minus'>-</button>
             </p>
@@ -179,7 +173,7 @@
                 <label id="hour"></label>
             </h2>
             <p style='text-align:right'>
-                <input id="hour-slider" type="range" min=0 max=48 step=1 value=10 />
+                <input id="hour-slider" type="range" min=0 max=23 step=1 value=9 />
                 <button id='hour-plus'>+</button>
                 <button id='hour-minus'>-</button>
             </p>
@@ -210,9 +204,8 @@
 
             ymd_list = {};
             var mday = new Date(2017, 2, 1);
-            for (var i = 0; i < 365; i++) {
+            for (var i = 0; i < 31; i++) {
                 var tomorrow = new Date(mday.getTime() + 24 * 60 * 60 * 1000 * i);
-                //ymd_list[i] = moment(tomorrow).format('YYYYMMDD');
                 ymd_list[i] = tomorrow;
             }
 
@@ -281,8 +274,6 @@
 
                                     console.log(qymd, ymd, hour);
 
-                                    //ymd_list[i] = moment(tomorrow).format('YYYYMMDD');
-
                                     $.getJSON("/data?ymd=" + qymd + "&hour=" + hour, function (alldata) {
 										console.log(qymd, ymd, hour);
                                         console.log(alldata);
@@ -318,17 +309,13 @@
                                     .getElementById('ymd-slider')
                                     .addEventListener('input', function (e) {
                                         var mymd = parseInt(e.target.value, 10);
-                                        //var hour = parseInt(e.target.value, $('#hour-slider').val());
-
                                         filterBy(mymd, mhour);
                                     });
 
                                 document
                                     .getElementById('hour-slider')
                                     .addEventListener('input', function (e) {
-                                        //var ymd = parseInt(e.target.value, $('#ymd-slider').val());
                                         var mhour = parseInt(e.target.value, 10);
-
                                         filterBy(mymd, mhour);
                                     });
 
@@ -346,9 +333,16 @@
                                     }
                                 });
                                 $('#hour-plus').on('click', function (e) {
-                                    if (mhour < 47) {
+                                    if (mhour < 23) {
                                         mhour += 1;
                                         filterBy(mymd, mhour);
+                                        $('#hour-slider').val(mhour);
+                                    }
+                                    else {
+                                        mhour = 0;
+                                        mymd += 1;
+                                        filterBy(mymd, mhour);
+                                        $('#ymd-slider').val(mymd);
                                         $('#hour-slider').val(mhour);
                                     }
                                 });
@@ -357,7 +351,13 @@
                                         mhour -= 1;
                                         filterBy(mymd, mhour);
                                         $('#hour-slider').val(mhour);
-
+                                    }
+                                    else {
+                                        mhour = 23;
+                                        mymd -= 1;
+                                        filterBy(mymd, mhour);
+                                        $('#ymd-slider').val(mymd);
+                                        $('#hour-slider').val(mhour);
                                     }
                                 });
 
